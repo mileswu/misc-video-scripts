@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+#ASS2SRT - translates .ass to .srt, preserving basic markup
 #Copyright (C) 2010 Adam Watkins (adam@stupidpupil.co.uk)
 #
 #This program is free software; you can redistribute it and/or
@@ -29,25 +30,26 @@ class ASSEvent
     assText = @text.dup
     assText.gsub!("\r", "")
     
-   ["b","u","i","s"].each do |mark|
-     assText.gsub!(/\{.*?\\#{mark}1.*?\}/) {|x| "<#{mark}>#{x}"}
+   ["b","u","i","s"].each do |mark| #{\b1} => <b>
+     assText.gsub!(/\{.*?\\#{mark}1.*?\}/) {|x| "<#{mark}>#{x}"} 
      assText.gsub!(/\{.*?\\#{mark}0.*?\}/) {|x| "</#{mark}>#{x}"}
      
-     misMatches = assText.scan("<#{mark}>").count-assText.scan("</#{mark}>").count
-  
+     misMatches = assText.scan("<#{mark}>").count - assText.scan("</#{mark}>").count
      if misMatches > 0
        assText.insert(-1, "</#{mark}>"*misMatches)
      elsif misMatches < 0
        assText.insert(0, "<#{mark}>"*-misMatches)
       end
+      
+      assText.gsub!("<#{mark}></#{mark}>", "") #Remove empty elements
    end
 
     assText.gsub!(/\{.+?\}/,"") #Remove all formatting braces
     assText.gsub!("\\h", " ")#ASS Hard space -> space
     assText.gsub!(/\\(N|n)/,"\n")#ASS newlines
      
-    assText.gsub!(/^\s+\n/, "\n") #SRT treats any 'empty' 
-    assText.gsub!(/\n{2,}/, "\n") #(including just spaces) line as a seperator
+    assText.gsub!(/^\s+\n/, "\n") #SRT treats any 'empty' (including just spaces)
+    assText.gsub!(/\n{2,}/, "\n") #line as a seperator
     
     return assText
   end 
@@ -59,24 +61,19 @@ assFile = File.new(ARGV[0])
 assEventsContents = assFile.read.match(/\[Events\](.*?)(^\[.+?\]|\z)/m)[1]
 assEventFormatArray = assEventsContents.match(/Format: (.*)$/)[1].split(", ").map!{|x| x.strip}
 
-assEventFormatHash = {
-  :start => assEventFormatArray.index("Start"),
-  :end => assEventFormatArray.index("End"),
-  :text => assEventFormatArray.index("Text") #It better also be the last one, because…
-}
-componentsAfterText = (assEventFormatArray.length-1 - assEventFormatHash[:text])
+componentsAfterText = (assEventFormatArray.length-1 - assEventFormatArray.index("Text"))
 
 assEvents = []
 assStartsAndEnds = []
 
 assEventsContents.lines.find_all {|x| !(x.match(/Dialogue: (.*)$/).nil?)}.each do |assEventString|
-  assStartStamp = assEventString.split(",")[assEventFormatHash[:start]]
-  assEndStamp = assEventString.split(",")[assEventFormatHash[:end]]
-  
-  if  componentsAfterText == 0 #It's the last
-    assText = assEventString.match(/(.*?,){#{assEventFormatHash[:text]-1}},(.+)/)[-1]
+  assStartStamp = assEventString.split(",")[assEventFormatArray.index("Start")]
+  assEndStamp = assEventString.split(",")[assEventFormatArray.index("End")]
+
+  if componentsAfterText == 0 #It's the last
+    assText = assEventString.match(/(.*?,){#{assEventFormatArray.index("Text")-1}},(.*)/)[-1]
   elsif componentsAfterText > 0 #Actually, this shouldn't ever happen, but we cope
-    assText = assEventString.match(/(.*?,){#{assEventFormatHash[:text]-1}},(.+)(,.+){#{componentsAfterText}}/)[-1]
+    assText = assEventString.match(/(.*?,){#{assEventFormatArray.index("Text")-1}},(.*)(,.+){#{componentsAfterText}}/)[-1]
   else
     raise "Error reading ASS Text"
   end
@@ -93,8 +90,8 @@ srtCount = 0
 
 assStartsAndEnds.each_with_index do |timeStamp, i|
   
-  #Find all subtitles that have started, but not ended. Sort them so those first in, are highest up.
-  assOnScreenEvents = assEvents.find_all{|x| (x.startStamp <= timeStamp and x.endStamp > timeStamp)}.sort {|x,y| x.startStamp <=> y.startStamp}
+  assOnScreenEvents = assEvents.find_all{|x| (x.startStamp <= timeStamp and x.endStamp > timeStamp and x.srtText.length > 0)} #Find all subtitles that have started, but not ended. And actually have any text.
+  assOnScreenEvents.sort! {|x,y| x.startStamp <=> y.startStamp} #Sort them so those first in, are highest up.
   
   if assOnScreenEvents.count > 0
     assEndStamp = assStartsAndEnds[i+1].nil? ? assOnScreenEvents[-1].endStamp : assStartsAndEnds[i+1]

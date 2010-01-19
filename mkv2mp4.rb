@@ -1,3 +1,6 @@
+#!/usr/bin/env ruby
+
+
 def find_exec(str)
 	return str if(`which #{str}` != "")
 	["./MacOS/", "./"].each do |i|
@@ -68,12 +71,12 @@ if(srt_sub or ass_sub)
   `#{$mp4box} -ttxt tmp.srt`
   `rm tmp.srt`
   #`sed -i "" 's/translation_y="0"/translation_y="250"/' tmp.ttxt` 
-  mp4box_extra += " -add tmp.ttxt"#:lang=en"
+  mp4box_extra += " -add tmp.ttxt":lang=en"
 end
-#`#{$handbrake} -i 1.mkv -o tmp.mp4 --preset="iPhone & iPod Touch"#{handbrake_extra} 1>&2`
+`#{$handbrake} -i 1.mkv -o tmp.mp4 --preset="iPhone & iPod Touch"#{handbrake_extra} 1>&2`
 `#{$mp4box} -add tmp.mp4#{mp4box_extra} 1.m4v`
-#`rm tmp.mp4`
-#`rm tmp.ttxt` if (srt_sub or ass_sub)
+`rm tmp.mp4`
+`rm tmp.ttxt` if (srt_sub or ass_sub)
 
 if(srt_sub or ass_sub)
   `sed -i "" "s/text/sbtl/" 1.m4v` 
