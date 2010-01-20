@@ -201,7 +201,7 @@ def convert_file(f)
 	`#{$rm} tmp.ttxt` if (srt_sub or ass_sub) and $options[:debug].nil?
 
 	if(srt_sub or ass_sub)
-	  `#{$sed} -i "" "s/text/sbtl/g" "#{$options[:output] + base_f}.m4v"` 
+	  `#{$sed} -i "" -e "s/text/sbtl/g" "#{$options[:output] + base_f}.m4v"` 
 	end
 end
 
