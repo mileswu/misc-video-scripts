@@ -1,13 +1,30 @@
 #!/usr/bin/env ruby
 
+def puts(*args)
+	super
+end
+
+def pv(*args)
+	puts(args) if $options[:verbose]
+end
+=begin
+module Kernel
+dd
+	def `(v)
+		pv "Runnning: #{v}"
+		super(v)
+	end
+end
+=end
 ## Option parsing
 
 require 'optparse'
-$options = {:output => "ipod/", :preset=>:iphone}
+$options = {:output => "", :preset=>:iphone}
 OptionParser.new do |opts|
-  opts.banner = "Usage: mkv2mp4.rb [options] [files]"
+  opts.banner = "Usage: mkv2mp4.rb [options] files"
   opts.on("-v", "Verbose output") { |v| $options[:verbose] = v }
-  opts.on("-o output", "Output directory, defaults to ipod/") do |o|
+  opts.on("-d", "Debug mode") { |d| $options[:debug] = d }
+  opts.on("-o output", "Output directory, defaults to .") do |o|
     o += "/" if o[-1] != "/"
     $options[:output] = o  
   end
@@ -24,26 +41,49 @@ hb_conversion_preset = {
   :universal => "Universal" }
 $options[:preset] = hb_conversion_preset[$options[:preset]]
 
-$files_to_do = ARGV
+$files = ARGV
+if $files.count == 0
+  puts "You must specify some files."
+  exit
+end
+
+pv "Called with the following options: #{$options.inspect}"
+pv "Processing the following files: #{$files}"
+
 ## Executable setup
 
 def find_exec(str)
-	return str if(`which #{str}` != "")
-	["./MacOS/", "./"].each do |i|
-		j = i+str
-		return j if (`ls #{j}` != "")
+	res = nil
+	if(`which #{str} 2>/dev/null` != "")
+		res = str
+	elsif
+		["./MacOS/", "./"].each do |i|
+			j = i+str
+			if (`ls #{j} 2>/dev/null` != "")
+				res = j
+				break
+			end
+		end
 	end
-	raise "Missing #{str}"
+
+	if res.nil?
+		puts "Missing the following executable: #{str}"
+		exit
+	else
+		pv "Found #{str} at #{res}"
+		return res
+	end
 end
 
 $mkvinfo = find_exec "mkvinfo"
 $mkvextract = find_exec "mkvextract"
 $mp4box = find_exec "MP4Box"
 $handbrake = find_exec "HandBrakeCLI"
+find_exec "ruby"
+find_exec "ass2srt.rb" #Hack to check it's there
 
-## Go
+## Conversion
 
-a = `#{$mkvinfo} 1.mkv`
 def find_tracks(str, regex)
 	lines = str.split("\n")
 	match = []
@@ -63,49 +103,72 @@ def find_tracks(str, regex)
 	return res
 end
 
-mp4box_extra = ""
-handbrake_extra =""
+def find_sub_track(a, regexp_type)
+	sub_tracks = find_tracks(a, regexp_type)
+	jpn = find_tracks(a, /Language: jpn/)
+	eng = find_tracks(a, /Language: eng/)
 
-#audio = find_tracks(a, /Language: jpn/).first
-#handbrake_extra += " -a #{audio}" if audio
-handbrake_extra += " -N jpn --native-dub"
-
-srt_sub = find_tracks(a, /S_TEXT\/UTF8/)
-ass_sub = find_tracks(a, /S_TEXT\/ASS/)
-jpn = find_tracks(a, /Language: jpn/)
-eng = find_tracks(a, /Language: eng/)
-
-for i in [srt_sub, ass_sub]
-	inter = i&jpn
+	inter = sub_tracks&jpn #Choose JPN subs first
 	if inter.count != 0
-		i.delete_if{ true }
-		i << inter.first
-	else
-		inter = i&eng
-		i.delete_if{true}
-		i << inter.first
+		res = inter.first
+	else #If not choose ENG ones
+		inter = sub_tracks&eng
+		res = inter.first
+	end
+	return res
+end
+
+def convert_file(f)
+	base_f = f[0..-5]	
+
+	a = `#{$mkvinfo} #{base_f}.mkv`
+	
+	mp4box_extra = ""
+	handbrake_extra =""
+	
+	#audio = find_tracks(a, /Language: jpn/).first
+	#handbrake_extra += " -a #{audio}" if audio
+	handbrake_extra += " -N jpn --native-dub"
+	
+	srt_sub = find_sub_track(a, /S_TEXT\/UTF8/)
+	ass_sub = find_sub_track(a, /S_TEXT\/ASS/) if srt_sub.nil?
+
+	if(srt_sub)
+		pv "SRT subs found at track #{srt_sub}. Extracting."
+	  `#{$mkvextract} tracks #{base_f}.mkv #{srt_sub}:tmp.srt #{"1>&2" if $options[:verbose]}`
+	elsif(ass_sub)
+		pv "ASS subs found at track #{ass_sub}. Extracting."
+	  `#{$mkvextract} tracks #{base_f}.mkv #{ass_sub}:tmp.ass #{"1>&2" if $options[:verbose]}`
+	  
+	  `ruby ass2srt.rb tmp.ass > tmp.srt`
+	  `rm tmp.ass` if $options[:debug].nil?
+	end
+
+	if(srt_sub or ass_sub)
+	  `#{$mp4box} -ttxt tmp.srt`
+	  `rm tmp.srt` if $options[:debug].nil?
+	  #`sed -i "" 's/translation_y="0"/translation_y="250"/' tmp.ttxt` 
+	  mp4box_extra += " -add tmp.ttxt:lang=en"
+	end
+
+	pv "Running encode."
+	`#{$handbrake} -i #{base_f}.mkv -o tmp.mp4 --preset="#{$options[:preset]}"#{handbrake_extra} #{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}`
+
+	pv "Running mux."
+	`#{$mp4box} -add tmp.mp4#{mp4box_extra} #{$options[:output] + base_f}.m4v #{"2>&1" if $options[:verbose]}`
+
+	`rm tmp.mp4` if $options[:debug].nil?
+	`rm tmp.ttxt` if (srt_sub or ass_sub) and $options[:debug].nil?
+
+	if(srt_sub or ass_sub)
+	  `sed -i "" "s/text/sbtl/" #{base_f}.m4v` 
 	end
 end
 
-if(srt_sub.first)
-  `#{$mkvextract} tracks 1.mkv #{srt_sub.first}:tmp.srt`
-elsif(ass_sub.first)
-  `#{$mkvextract} tracks 1.mkv #{ass_sub.first}:tmp.ass`
-  `ruby ass2srt.rb tmp.ass > tmp.srt`
-  `rm tmp.ass`
-end
-
-if(srt_sub or ass_sub)
-  `#{$mp4box} -ttxt tmp.srt`
-  `rm tmp.srt`
-  #`sed -i "" 's/translation_y="0"/translation_y="250"/' tmp.ttxt` 
-  mp4box_extra += " -add tmp.ttxt:lang=en"
-end
-`#{$handbrake} -i 1.mkv -o tmp.mp4 --preset="iPhone & iPod Touch"#{handbrake_extra} 1>&2`
-`#{$mp4box} -add tmp.mp4#{mp4box_extra} 1.m4v`
-`rm tmp.mp4`
-`rm tmp.ttxt` if (srt_sub or ass_sub)
-
-if(srt_sub or ass_sub)
-  `sed -i "" "s/text/sbtl/" 1.m4v` 
+`mkdir #{$options[:output]} 2>&1`
+$files.each do |f|
+	#check it exists
+	puts "Converting #{f}"
+	convert_file(f)
+	puts "Done #{f}"
 end
