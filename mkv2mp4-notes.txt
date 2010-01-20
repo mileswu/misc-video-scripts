@@ -1,0 +1,19 @@
+Tested on Ruby 1.8.6 and 1.8.7
+
+==Unix build instructions==
+http://handbrake.fr/downloads.php
+Install MP4Box and MKVtoolnix and ruby
+
+==Mac OS X build instructions==
+http://www.macupdate.com/info.php/id/16837 - MKVtoolnix
+http://handbrake.fr/downloads.php
+http://penguintool.blogspot.com/ - MP4Box
+
+==Windows build instructions==
+http://ocra.rubyforge.org/
+http://handbrake.fr/downloads.php
+http://gnuwin32.sourceforge.net/packages/sed.htm
+http://www.videohelp.com/tools/mp4box
+http://www.videohelp.com/tools/MKVtoolnix
+
+ocra mkv2mp4.rb HandBrakeCLI.exe js32.dll libgcc_s_sjlj-1.dll mkvextract.exe mkvinfo.exe MP4Box.exe sed.exe libiconv2.dll libintl3.dll regex2.dll

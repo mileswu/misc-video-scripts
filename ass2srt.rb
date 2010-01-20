@@ -34,7 +34,7 @@ class ASSEvent
      assText.gsub!(/\{.*?\\#{mark}1.*?\}/) {|x| "<#{mark}>#{x}"} 
      assText.gsub!(/\{.*?\\#{mark}0.*?\}/) {|x| "</#{mark}>#{x}"}
      
-     misMatches = assText.scan("<#{mark}>").count - assText.scan("</#{mark}>").count
+     misMatches = assText.scan("<#{mark}>").length - assText.scan("</#{mark}>").length
      if misMatches > 0
        assText.insert(-1, "</#{mark}>"*misMatches)
      elsif misMatches < 0
@@ -56,9 +56,10 @@ class ASSEvent
   
 end
 
-assFile = File.new(ARGV[0])
+def ass2srt(assFile)
 
-assEventsContents = assFile.read.match(/\[Events\](.*?)(^\[.+?\]|\z)/m)[1]
+
+assEventsContents = assFile.match(/\[Events\](.*?)(^\[.+?\]|\z)/m)[1]
 assEventFormatArray = assEventsContents.match(/Format: (.*)$/)[1].split(", ").map!{|x| x.strip}
 
 componentsAfterText = (assEventFormatArray.length-1 - assEventFormatArray.index("Text"))
@@ -66,7 +67,7 @@ componentsAfterText = (assEventFormatArray.length-1 - assEventFormatArray.index(
 assEvents = []
 assStartsAndEnds = []
 
-assEventsContents.lines.find_all {|x| !(x.match(/Dialogue: (.*)$/).nil?)}.each do |assEventString|
+assEventsContents.split($/).find_all {|x| !(x.match(/Dialogue: (.*)$/).nil?)}.each do |assEventString|
   assStartStamp = assEventString.split(",")[assEventFormatArray.index("Start")]
   assEndStamp = assEventString.split(",")[assEventFormatArray.index("End")]
 
@@ -93,7 +94,7 @@ assStartsAndEnds.each_with_index do |timeStamp, i|
   assOnScreenEvents = assEvents.find_all{|x| (x.startStamp <= timeStamp and x.endStamp > timeStamp and x.srtText.length > 0)} #Find all subtitles that have started, but not ended. And actually have any text.
   assOnScreenEvents.sort! {|x,y| x.startStamp <=> y.startStamp} #Sort them so those first in, are highest up.
   
-  if assOnScreenEvents.count > 0
+  if assOnScreenEvents.length > 0
     assEndStamp = assStartsAndEnds[i+1].nil? ? assOnScreenEvents[-1].endStamp : assStartsAndEnds[i+1]
 
     srtOut += "#{srtCount += 1}\n" #Sarts at one
@@ -107,4 +108,10 @@ assStartsAndEnds.each_with_index do |timeStamp, i|
   
 end
 
-puts srtOut
+return srtOut
+
+end
+
+if __FILE__ == $0
+  puts ass2srt(File.open(ARGV[0]).read)
+end

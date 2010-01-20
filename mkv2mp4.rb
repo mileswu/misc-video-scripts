@@ -1,19 +1,28 @@
 #!/usr/bin/env ruby
+require 'ass2srt'
 
 def puts(*args)
-	printf "\033[31m"
-	print(args)
-	printf "\033[0m\n"
+    if $platform == :unix
+	  printf "\033[31m" 
+	  print(args)
+	  printf "\033[0m\n"
+	else
+	  super(args)
+	end
 end
 
 def pv(*args)
 	if $options[:verbose]
-		printf "\033[32m"
-		print args
-		printf "\033[0m\n"
+		if $platform == :unix
+			printf "\033[32m" 
+			print args
+			printf "\033[0m\n"
+		else
+			puts args
+		end
 	end
 end
-def `(v)
+def `(v) #` 
 	pv "Runnning: #{v}"
 	super(v)
 end
@@ -21,6 +30,56 @@ class Array
 	def count
 		length
 	end
+end
+
+## Executable setup / Environment
+def find_exec(str)
+	res = nil
+	if(`which #{str} 2> /dev/null` != "")
+		res = str
+	elsif
+		["./MacOS/", "./"].each do |i|
+			j = i+str
+			if (`ls #{j} 2> /dev/null` != "")
+				res = j
+				break
+			end
+		end
+	end
+
+	if res.nil?
+		puts "Missing the following executable: #{str}"
+		exit
+	else
+		pv "Found #{str} at #{res}"
+		return res
+	end
+end
+if RUBY_PLATFORM =~ /win32/
+  $platform = :win
+  
+  base = File.dirname(__FILE__) + "\\"
+  base += "src\\" if(__FILE__ =~ /exe/)
+  
+  $mkvinfo = base + "mkvinfo"
+  $mkvextract = base + "mkvextract"
+  $mp4box = base + "MP4Box"
+  $handbrake = base + "HandBrakeCLI"
+  $rm = "del"
+  $mkdir = "mkdir"
+  $sed = base + "sed"
+else
+  $platform = :unix
+  
+  $mkvinfo = find_exec "mkvinfo"
+  $mkvextract = find_exec "mkvextract"
+  $mp4box = find_exec "MP4Box"
+  $handbrake = find_exec "HandBrakeCLI"
+  $rm = "rm"
+  $mkdir = "mkdir"
+  $sed = "sed"
+  find_exec "ruby"
+  find_exec "ass2srt.rb" #Hack to check it's there
 end
 
 ## Option parsing
@@ -32,7 +91,8 @@ OptionParser.new do |opts|
   opts.on("-v", "Verbose output") { |v| $options[:verbose] = v }
   opts.on("-d", "Debug mode") { |d| $options[:debug] = d }
   opts.on("-o output", "Output directory, defaults to .") do |o|
-    o += "/" if o[-1] != "/"
+    o += "/" if o[-1] != "/" if $platform == :unix
+	o += "\\" if o[-1] != "\\" if $platform == :win
     $options[:output] = o  
   end
   opts.on("-p preset", "Preset, defaults to iphone. Choice of iphone, ipod, appletv, universal", [:iphone, :ipod, :appletv, :universal]) do |p|
@@ -56,38 +116,6 @@ end
 
 pv "Called with the following options: #{$options.inspect}"
 pv "Processing the following files: #{$files}"
-
-## Executable setup
-
-def find_exec(str)
-	res = nil
-	if(`which #{str} 2>/dev/null` != "")
-		res = str
-	elsif
-		["./MacOS/", "./"].each do |i|
-			j = i+str
-			if (`ls #{j} 2>/dev/null` != "")
-				res = j
-				break
-			end
-		end
-	end
-
-	if res.nil?
-		puts "Missing the following executable: #{str}"
-		exit
-	else
-		pv "Found #{str} at #{res}"
-		return res
-	end
-end
-
-$mkvinfo = find_exec "mkvinfo"
-$mkvextract = find_exec "mkvextract"
-$mp4box = find_exec "MP4Box"
-$handbrake = find_exec "HandBrakeCLI"
-find_exec "ruby"
-find_exec "ass2srt.rb" #Hack to check it's there
 
 ## Conversion
 
@@ -147,13 +175,17 @@ def convert_file(f)
 		pv "ASS subs found at track #{ass_sub}. Extracting."
 	  `#{$mkvextract} tracks "#{base_f}.mkv" #{ass_sub}:tmp.ass #{"1>&2" if $options[:verbose]}`
 	  
-	  `ruby ass2srt.rb tmp.ass > tmp.srt`
-	  `rm tmp.ass` if $options[:debug].nil?
+	  s = File.open("tmp.ass").read
+	  sout = ass2srt(s)
+	  f = File.open("tmp.srt", "w")
+	  f.print(sout)
+	  f.close
+	  `#{$rm} tmp.ass` if $options[:debug].nil?
 	end
 
 	if(srt_sub or ass_sub)
 	  `#{$mp4box} -ttxt tmp.srt`
-	  `rm tmp.srt` if $options[:debug].nil?
+	  `#{$rm} tmp.srt` if $options[:debug].nil?
 	  #`sed -i "" 's/translation_y="0"/translation_y="250"/' tmp.ttxt` 
 	  mp4box_extra += " -add tmp.ttxt:lang=en"
 	end
@@ -162,18 +194,18 @@ def convert_file(f)
 	`#{$handbrake} -i "#{base_f}.mkv" -o tmp.mp4 --preset="#{$options[:preset]}"#{handbrake_extra} #{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}`
 
 	pv "Running mux."
-	`rm #{$options[:output] + base_f}.m4v 2>&1`
+	`#{$rm} "#{$options[:output] + base_f}.m4v" 2>&1`
 	`#{$mp4box} -add tmp.mp4#{mp4box_extra} "#{$options[:output] + base_f}.m4v" #{"1>&2" if $options[:verbose]}`
 
-	`rm tmp.mp4` if $options[:debug].nil?
-	`rm tmp.ttxt` if (srt_sub or ass_sub) and $options[:debug].nil?
+	`#{$rm} tmp.mp4` if $options[:debug].nil?
+	`#{$rm} tmp.ttxt` if (srt_sub or ass_sub) and $options[:debug].nil?
 
 	if(srt_sub or ass_sub)
-	  `sed -i "" "s/text/sbtl/g" "#{$options[:output] + base_f}.m4v"` 
+	  `#{$sed} -i "" "s/text/sbtl/g" "#{$options[:output] + base_f}.m4v"` 
 	end
 end
 
-`mkdir #{$options[:output]} 2>&1`
+`#{$mkdir} #{$options[:output]} 2>&1`
 $files.each do |f|
 	#check it exists
 	begin
