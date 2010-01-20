@@ -1,5 +1,31 @@
 #!/usr/bin/env ruby
 
+## Option parsing
+
+require 'optparse'
+$options = {:output => "ipod/", :preset=>:iphone}
+OptionParser.new do |opts|
+  opts.banner = "Usage: mkv2mp4.rb [options] [files]"
+  opts.on("-v", "Verbose output") { |v| $options[:verbose] = v }
+  opts.on("-o output", "Output directory, defaults to ipod/") do |o|
+    o += "/" if o[-1] != "/"
+    $options[:output] = o  
+  end
+  opts.on("-p preset", "Preset, defaults to iphone. Choice of iphone, ipod, appletv, universal", [:iphone, :ipod, :appletv, :universal]) do |p|
+    $options[:preset] = p
+  end
+  opts.on_tail("-h", "Show this message") { puts opts; exit }
+end.parse!
+
+hb_conversion_preset = {
+  :iphone => "iPhone & iPod Touch",
+  :ipod => "iPod",
+  :appletv => "AppleTV",
+  :universal => "Universal" }
+$options[:preset] = hb_conversion_preset[$options[:preset]]
+
+$files_to_do = ARGV
+## Executable setup
 
 def find_exec(str)
 	return str if(`which #{str}` != "")
@@ -14,6 +40,8 @@ $mkvinfo = find_exec "mkvinfo"
 $mkvextract = find_exec "mkvextract"
 $mp4box = find_exec "MP4Box"
 $handbrake = find_exec "HandBrakeCLI"
+
+## Go
 
 a = `#{$mkvinfo} 1.mkv`
 def find_tracks(str, regex)
@@ -71,7 +99,7 @@ if(srt_sub or ass_sub)
   `#{$mp4box} -ttxt tmp.srt`
   `rm tmp.srt`
   #`sed -i "" 's/translation_y="0"/translation_y="250"/' tmp.ttxt` 
-  mp4box_extra += " -add tmp.ttxt":lang=en"
+  mp4box_extra += " -add tmp.ttxt:lang=en"
 end
 `#{$handbrake} -i 1.mkv -o tmp.mp4 --preset="iPhone & iPod Touch"#{handbrake_extra} 1>&2`
 `#{$mp4box} -add tmp.mp4#{mp4box_extra} 1.m4v`
