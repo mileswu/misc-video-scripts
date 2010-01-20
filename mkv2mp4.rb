@@ -152,7 +152,7 @@ def convert_file(f)
 	end
 
 	pv "Running encode."
-	`#{$handbrake} -i #{base_f}.mkv -o tmp.mp4 --preset="#{$options[:preset]}"#{handbrake_extra} #{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}`
+	#`#{$handbrake} -i #{base_f}.mkv -o tmp.mp4 --preset="#{$options[:preset]}"#{handbrake_extra} #{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}`
 
 	pv "Running mux."
 	`#{$mp4box} -add tmp.mp4#{mp4box_extra} #{$options[:output] + base_f}.m4v #{"2>&1" if $options[:verbose]}`
@@ -161,13 +161,20 @@ def convert_file(f)
 	`rm tmp.ttxt` if (srt_sub or ass_sub) and $options[:debug].nil?
 
 	if(srt_sub or ass_sub)
-	  `sed -i "" "s/text/sbtl/" #{base_f}.m4v` 
+	  `sed -i "" "s/text/sbtl/g" #{$options[:output] + base_f}.m4v` 
 	end
 end
 
 `mkdir #{$options[:output]} 2>&1`
 $files.each do |f|
 	#check it exists
+	begin
+		fp = File.open(f)
+	rescue => err
+		puts "Cannot open file #{f}: #{err}"
+		exit
+	end
+	
 	puts "Converting #{f}"
 	convert_file(f)
 	puts "Done #{f}"
