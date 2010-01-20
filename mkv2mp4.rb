@@ -1,11 +1,17 @@
 #!/usr/bin/env ruby
 
 def puts(*args)
-	super
+	printf "\033[31m"
+	print(args)
+	printf "\033[0m\n"
 end
 
 def pv(*args)
-	puts(args) if $options[:verbose]
+	if $options[:verbose]
+		printf "\033[32m"
+		print args
+		printf "\033[0m\n"
+	end
 end
 =begin
 module Kernel
