@@ -158,7 +158,7 @@ def convert_file(f)
 	end
 
 	pv "Running encode."
-	#`#{$handbrake} -i #{base_f}.mkv -o tmp.mp4 --preset="#{$options[:preset]}"#{handbrake_extra} #{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}`
+	`#{$handbrake} -i #{base_f}.mkv -o tmp.mp4 --preset="#{$options[:preset]}"#{handbrake_extra} #{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}`
 
 	pv "Running mux."
 	`#{$mp4box} -add tmp.mp4#{mp4box_extra} #{$options[:output] + base_f}.m4v #{"2>&1" if $options[:verbose]}`
