@@ -32,6 +32,41 @@ class Array
 	end
 end
 
+## Option parsing
+
+require 'optparse'
+$options = {:output => "", :preset=>:iphone}
+OptionParser.new do |opts|
+  opts.banner = "Usage: mkv2mp4.rb [options] files"
+  opts.on("-v", "Verbose output") { |v| $options[:verbose] = v }
+  opts.on("-d", "Debug mode") { |d| $options[:debug] = d }
+  opts.on("-o output", "Output directory, defaults to .") do |o|
+    o += "/" if o[-1] != "/" if $platform == :unix
+	o += "\\" if o[-1] != "\\" if $platform == :win
+    $options[:output] = o  
+  end
+  opts.on("-p preset", "Preset, defaults to iphone. Choice of iphone, ipod, appletv, universal", [:iphone, :ipod, :appletv, :universal]) do |p|
+    $options[:preset] = p
+  end
+  opts.on_tail("-h", "Show this message") { puts opts; exit }
+end.parse!
+
+hb_conversion_preset = {
+  :iphone => "iPhone & iPod Touch",
+  :ipod => "iPod",
+  :appletv => "AppleTV",
+  :universal => "Universal" }
+$options[:preset] = hb_conversion_preset[$options[:preset]]
+
+$files = ARGV
+if $files.count == 0
+  puts "You must specify some files."
+  exit
+end
+
+pv "Called with the following options: #{$options.inspect}"
+pv "Processing the following files: #{$files}"
+
 ## Executable setup / Environment
 def find_exec(str)
 	res = nil
@@ -81,41 +116,6 @@ else
   find_exec "ruby"
   find_exec "ass2srt.rb" #Hack to check it's there
 end
-
-## Option parsing
-
-require 'optparse'
-$options = {:output => "", :preset=>:iphone}
-OptionParser.new do |opts|
-  opts.banner = "Usage: mkv2mp4.rb [options] files"
-  opts.on("-v", "Verbose output") { |v| $options[:verbose] = v }
-  opts.on("-d", "Debug mode") { |d| $options[:debug] = d }
-  opts.on("-o output", "Output directory, defaults to .") do |o|
-    o += "/" if o[-1] != "/" if $platform == :unix
-	o += "\\" if o[-1] != "\\" if $platform == :win
-    $options[:output] = o  
-  end
-  opts.on("-p preset", "Preset, defaults to iphone. Choice of iphone, ipod, appletv, universal", [:iphone, :ipod, :appletv, :universal]) do |p|
-    $options[:preset] = p
-  end
-  opts.on_tail("-h", "Show this message") { puts opts; exit }
-end.parse!
-
-hb_conversion_preset = {
-  :iphone => "iPhone & iPod Touch",
-  :ipod => "iPod",
-  :appletv => "AppleTV",
-  :universal => "Universal" }
-$options[:preset] = hb_conversion_preset[$options[:preset]]
-
-$files = ARGV
-if $files.count == 0
-  puts "You must specify some files."
-  exit
-end
-
-pv "Called with the following options: #{$options.inspect}"
-pv "Processing the following files: #{$files}"
 
 ## Conversion
 
