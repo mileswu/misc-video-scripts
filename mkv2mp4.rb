@@ -17,6 +17,12 @@ def `(v)
 	pv "Runnning: #{v}"
 	super(v)
 end
+class Array
+	def count
+		length
+	end
+end
+
 ## Option parsing
 
 require 'optparse'
