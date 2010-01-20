@@ -67,7 +67,7 @@ if RUBY_PLATFORM =~ /win32/
   $handbrake = base + "HandBrakeCLI"
   $rm = "del"
   $mkdir = "mkdir"
-  $sed = base + "sed"
+  $sed = base + "sed -b"
 else
   $platform = :unix
   
@@ -175,9 +175,9 @@ def convert_file(f)
 		pv "ASS subs found at track #{ass_sub}. Extracting."
 	  `#{$mkvextract} tracks "#{base_f}.mkv" #{ass_sub}:tmp.ass #{"1>&2" if $options[:verbose]}`
 	  
-	  s = File.open("tmp.ass").read
+	  s = File.open("tmp.ass", "b").read
 	  sout = ass2srt(s)
-	  f = File.open("tmp.srt", "w")
+	  f = File.open("tmp.srt", "bw")
 	  f.print(sout)
 	  f.close
 	  `#{$rm} tmp.ass` if $options[:debug].nil?
@@ -194,14 +194,15 @@ def convert_file(f)
 	`#{$handbrake} -i "#{base_f}.mkv" -o tmp.mp4 --preset="#{$options[:preset]}"#{handbrake_extra} #{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}`
 
 	pv "Running mux."
-	`#{$rm} "#{$options[:output] + base_f}.m4v" 2>&1`
-	`#{$mp4box} -add tmp.mp4#{mp4box_extra} "#{$options[:output] + base_f}.m4v" #{"1>&2" if $options[:verbose]}`
+	`#{$rm} "tmp.m4v" 2>&1`
+	`#{$mp4box} -add tmp.mp4#{mp4box_extra} "tmp.m4v" #{"1>&2" if $options[:verbose]}`
 
 	`#{$rm} tmp.mp4` if $options[:debug].nil?
 	`#{$rm} tmp.ttxt` if (srt_sub or ass_sub) and $options[:debug].nil?
 
 	if(srt_sub or ass_sub)
-	  `#{$sed} -i "" -e "s/text/sbtl/g" "#{$options[:output] + base_f}.m4v"` 
+	  `#{$sed} -e "s/text/sbtl/g" "tmp.m4v" > "#{$options[:output] + base_f}.m4v"` 
+	  `#{$rm} tmp.m4v` if $options[:debug].nil?
 	end
 end
 

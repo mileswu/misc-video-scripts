@@ -113,5 +113,5 @@ return srtOut
 end
 
 if __FILE__ == $0
-  puts ass2srt(File.open(ARGV[0]).read)
+  puts ass2srt(File.open(ARGV[0], "b").read)
 end
