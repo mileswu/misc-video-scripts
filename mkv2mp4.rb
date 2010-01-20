@@ -13,15 +13,10 @@ def pv(*args)
 		printf "\033[0m\n"
 	end
 end
-=begin
-module Kernel
-dd
-	def `(v)
-		pv "Runnning: #{v}"
-		super(v)
-	end
+def `(v)
+	pv "Runnning: #{v}"
+	super(v)
 end
-=end
 ## Option parsing
 
 require 'optparse'
@@ -127,7 +122,7 @@ end
 def convert_file(f)
 	base_f = f[0..-5]	
 
-	a = `#{$mkvinfo} #{base_f}.mkv`
+	a = `#{$mkvinfo} "#{base_f}.mkv"`
 	
 	mp4box_extra = ""
 	handbrake_extra =""
@@ -141,10 +136,10 @@ def convert_file(f)
 
 	if(srt_sub)
 		pv "SRT subs found at track #{srt_sub}. Extracting."
-	  `#{$mkvextract} tracks #{base_f}.mkv #{srt_sub}:tmp.srt #{"1>&2" if $options[:verbose]}`
+	  `#{$mkvextract} tracks "#{base_f}.mkv" #{srt_sub}:tmp.srt #{"1>&2" if $options[:verbose]}`
 	elsif(ass_sub)
 		pv "ASS subs found at track #{ass_sub}. Extracting."
-	  `#{$mkvextract} tracks #{base_f}.mkv #{ass_sub}:tmp.ass #{"1>&2" if $options[:verbose]}`
+	  `#{$mkvextract} tracks "#{base_f}.mkv" #{ass_sub}:tmp.ass #{"1>&2" if $options[:verbose]}`
 	  
 	  `ruby ass2srt.rb tmp.ass > tmp.srt`
 	  `rm tmp.ass` if $options[:debug].nil?
@@ -158,16 +153,17 @@ def convert_file(f)
 	end
 
 	pv "Running encode."
-	`#{$handbrake} -i #{base_f}.mkv -o tmp.mp4 --preset="#{$options[:preset]}"#{handbrake_extra} #{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}`
+	`#{$handbrake} -i "#{base_f}.mkv" -o tmp.mp4 --preset="#{$options[:preset]}"#{handbrake_extra} #{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}`
 
 	pv "Running mux."
-	`#{$mp4box} -add tmp.mp4#{mp4box_extra} #{$options[:output] + base_f}.m4v #{"2>&1" if $options[:verbose]}`
+	`rm #{$options[:output] + base_f}.m4v 2>&1`
+	`#{$mp4box} -add tmp.mp4#{mp4box_extra} "#{$options[:output] + base_f}.m4v" #{"1>&2" if $options[:verbose]}`
 
 	`rm tmp.mp4` if $options[:debug].nil?
 	`rm tmp.ttxt` if (srt_sub or ass_sub) and $options[:debug].nil?
 
 	if(srt_sub or ass_sub)
-	  `sed -i "" "s/text/sbtl/g" #{$options[:output] + base_f}.m4v` 
+	  `sed -i "" "s/text/sbtl/g" "#{$options[:output] + base_f}.m4v"` 
 	end
 end
 
