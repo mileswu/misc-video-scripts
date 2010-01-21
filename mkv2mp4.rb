@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-require 'ass2srt'
+require (File.dirname(__FILE__) + "/ass2srt")
 
 def puts(*args)
     if $platform == :unix
@@ -39,7 +39,7 @@ $options = {:output => "", :preset=>:iphone}
 OptionParser.new do |opts|
   opts.banner = "Usage: mkv2mp4.rb [options] files"
   opts.on("-v", "Verbose output") { |v| $options[:verbose] = v }
-  opts.on("-d", "Debug mode") { |d| $options[:debug] = d }
+  opts.on("-d", "Debug mode") { |d| $options[:debug] = d; $options[:verbose] = d }
   opts.on("-o output", "Output directory, defaults to .") do |o|
     o += "/" if o[-1] != "/" if $platform == :unix
 	o += "\\" if o[-1] != "\\" if $platform == :win
@@ -113,8 +113,6 @@ else
   $rm = "rm"
   $mkdir = "mkdir"
   $sed = "sed"
-  find_exec "ruby"
-  find_exec "ass2srt.rb" #Hack to check it's there
 end
 
 ## Conversion
@@ -170,14 +168,17 @@ def convert_file(f)
 
 	if(srt_sub)
 		pv "SRT subs found at track #{srt_sub}. Extracting."
-	  `#{$mkvextract} tracks "#{base_f}.mkv" #{srt_sub}:tmp.srt #{"1>&2" if $options[:verbose]}`
+	  `#{$mkvextract} tracks "#{base_f}.mkv" #{srt_sub}:tmp_orig.srt #{"1>&2" if $options[:verbose]}`
+	  `#{$sed} -e "s/{.*}//g" tmp_orig.srt > tmp.srt`
+	  `#{$rm} tmp_orig.srt` if $options[:debug].nil?
 	elsif(ass_sub)
 		pv "ASS subs found at track #{ass_sub}. Extracting."
 	  `#{$mkvextract} tracks "#{base_f}.mkv" #{ass_sub}:tmp.ass #{"1>&2" if $options[:verbose]}`
 	  
-	  s = File.open("tmp.ass", "b").read
+	  pv "Converting ASS Subs"
+	  s = File.open("tmp.ass", "rb").read
 	  sout = ass2srt(s)
-	  f = File.open("tmp.srt", "bw")
+	  f = File.open("tmp.srt", "wb")
 	  f.print(sout)
 	  f.close
 	  `#{$rm} tmp.ass` if $options[:debug].nil?
