@@ -45,6 +45,7 @@ OptionParser.new do |opts|
 	o += "\\" if o[-1] != "\\" if $platform == :win
     $options[:output] = o  
   end
+  opts.on("-q quality", "Quality 0.0->1.0") { |q| $options[:quality] = q }
   opts.on("-p preset", "Preset, defaults to iphone. Choice of iphone, ipod, appletv, universal", [:iphone, :ipod, :appletv, :universal]) do |p|
     $options[:preset] = p
   end
@@ -192,7 +193,7 @@ def convert_file(f)
 	end
 
 	pv "Running encode."
-	`#{$handbrake} -i "#{base_f}.mkv" -o tmp.mp4 --preset="#{$options[:preset]}"#{handbrake_extra} #{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}`
+	`#{$handbrake} -i "#{base_f}.mkv" -o tmp.mp4#{(" -q " + $options[:quality]) if $options[:quality]} --preset="#{$options[:preset]}"#{handbrake_extra} #{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}`
 
 	pv "Running mux."
 	`#{$rm} "tmp.m4v" 2>&1`
