@@ -1,0 +1,2 @@
+require 'wx'
+include Wx
