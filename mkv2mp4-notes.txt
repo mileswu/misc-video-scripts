@@ -16,4 +16,4 @@ http://gnuwin32.sourceforge.net/packages/sed.htm
 http://www.videohelp.com/tools/mp4box
 http://www.videohelp.com/tools/MKVtoolnix
 
-ocra mkv2mp4.rb HandBrakeCLI.exe js32.dll libgcc_s_sjlj-1.dll mkvextract.exe mkvinfo.exe MP4Box.exe sed.exe libiconv2.dll libintl3.dll regex2.dll
+ocra mkv2mp4-gui.rb HandBrakeCLI.exe js32.dll libgcc_s_sjlj-1.dll mkvextract.exe mkvinfo.exe MP4Box.exe sed.exe libiconv2.dll libintl3.dll regex2.dll

@@ -87,4 +87,5 @@ class MinimalApp < App
    
    
 end
+exit if defined?(Ocra)
 MinimalApp.new.main_loop
