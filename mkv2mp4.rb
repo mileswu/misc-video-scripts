@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby
 require (File.dirname(__FILE__) + "/ass2srt")
+require 'optparse'
 
 def puts(*args)
     if $platform == :unix
@@ -26,6 +27,12 @@ def `(v) #`
 	pv "Runnning: #{v}"
 	super(v)
 end
+
+def run(v)
+	pv "Runnning: #{v}"
+	system(v)
+end
+
 class Array
 	def count
 		length
@@ -34,39 +41,40 @@ end
 
 ## Option parsing
 
-require 'optparse'
-$options = {:output => "", :preset=>:iphone}
-OptionParser.new do |opts|
-  opts.banner = "Usage: mkv2mp4.rb [options] files"
-  opts.on("-v", "Verbose output") { |v| $options[:verbose] = v }
-  opts.on("-d", "Debug mode") { |d| $options[:debug] = d; $options[:verbose] = d }
-  opts.on("-o output", "Output directory, defaults to .") do |o|
-    o += "/" if o[-1] != "/" if $platform == :unix
-	o += "\\" if o[-1] != "\\" if $platform == :win
-    $options[:output] = o  
-  end
-  opts.on("-q quality", "Quality 0.0->1.0") { |q| $options[:quality] = q }
-  opts.on("-p preset", "Preset, defaults to iphone. Choice of iphone, ipod, appletv, universal", [:iphone, :ipod, :appletv, :universal]) do |p|
-    $options[:preset] = p
-  end
-  opts.on_tail("-h", "Show this message") { puts opts; exit }
-end.parse!
 
+$options = {:output => "", :preset=>:iphone}
+if __FILE__ == $0
+	OptionParser.new do |opts|
+	  opts.banner = "Usage: mkv2mp4.rb [options] files"
+	  opts.on("-v", "Verbose output") { |v| $options[:verbose] = v }
+	  opts.on("-d", "Debug mode") { |d| $options[:debug] = d; $options[:verbose] = d }
+	  opts.on("-o output", "Output directory, defaults to .") do |o|
+		o += "/" if o[-1] != "/" if $platform == :unix
+		o += "\\" if o[-1] != "\\" if $platform == :win
+		$options[:output] = o  
+	  end
+	  opts.on("-q quality", "Quality 0.0->1.0") { |q| $options[:quality] = q }
+	  opts.on("-p preset", "Preset, defaults to iphone. Choice of iphone, ipod, appletv, universal", [:iphone, :ipod, :appletv, :universal]) do |p|
+		$options[:preset] = p
+	  end
+	  opts.on_tail("-h", "Show this message") { puts opts; exit }
+	end.parse!
+
+	$files = ARGV
+	if $files.count == 0
+	  puts "You must specify some files."
+	  exit
+	end
+
+	pv "Called with the following options: #{$options.inspect}"
+	pv "Processing the following files: #{$files}"
+end
 hb_conversion_preset = {
   :iphone => "iPhone & iPod Touch",
   :ipod => "iPod",
   :appletv => "AppleTV",
-  :universal => "Universal" }
+ :universal => "Universal" }
 $options[:preset] = hb_conversion_preset[$options[:preset]]
-
-$files = ARGV
-if $files.count == 0
-  puts "You must specify some files."
-  exit
-end
-
-pv "Called with the following options: #{$options.inspect}"
-pv "Processing the following files: #{$files}"
 
 ## Executable setup / Environment
 def find_exec(str)
@@ -169,12 +177,12 @@ def convert_file(f)
 
 	if(srt_sub)
 		pv "SRT subs found at track #{srt_sub}. Extracting."
-	  `#{$mkvextract} tracks "#{base_f}.mkv" #{srt_sub}:tmp_orig.srt #{"1>&2" if $options[:verbose]}`
-	  `#{$sed} -e "s/{.*}//g" tmp_orig.srt > tmp.srt`
-	  `#{$rm} tmp_orig.srt` if $options[:debug].nil?
+	  run("#{$mkvextract} tracks \"#{base_f}.mkv\" #{srt_sub}:tmp_orig.srt #{"1>&2" if $options[:verbose]}")
+	  run("#{$sed} -e \"s/{.*}//g\" tmp_orig.srt > tmp.srt")
+	  run("#{$rm} tmp_orig.srt") if $options[:debug].nil?
 	elsif(ass_sub)
 		pv "ASS subs found at track #{ass_sub}. Extracting."
-	  `#{$mkvextract} tracks "#{base_f}.mkv" #{ass_sub}:tmp.ass #{"1>&2" if $options[:verbose]}`
+	  run("#{$mkvextract} tracks \"#{base_f}.mkv\" #{ass_sub}:tmp.ass #{"1>&2" if $options[:verbose]}")
 	  
 	  pv "Converting ASS Subs"
 	  s = File.open("tmp.ass", "rb").read
@@ -182,43 +190,48 @@ def convert_file(f)
 	  f = File.open("tmp.srt", "wb")
 	  f.print(sout)
 	  f.close
-	  `#{$rm} tmp.ass` if $options[:debug].nil?
+	  run("#{$rm} tmp.ass") if $options[:debug].nil?
 	end
 
 	if(srt_sub or ass_sub)
-	  `#{$mp4box} -ttxt tmp.srt`
-	  `#{$rm} tmp.srt` if $options[:debug].nil?
+	  run("#{$mp4box} -ttxt tmp.srt")
+	  run("#{$rm} tmp.srt") if $options[:debug].nil?
 	  #`sed -i "" 's/translation_y="0"/translation_y="250"/' tmp.ttxt` 
 	  mp4box_extra += " -add tmp.ttxt:lang=en"
 	end
-
+	
+	
+	
 	pv "Running encode."
-	`#{$handbrake} -i "#{base_f}.mkv" -o tmp.mp4#{(" -q " + $options[:quality]) if $options[:quality]} --preset="#{$options[:preset]}"#{handbrake_extra} #{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}`
-
+	run("#{$handbrake} -i \"#{base_f}.mkv\" -o tmp.mp4#{(" -q " + $options[:quality]) if $options[:quality]} --preset=\"#{$options[:preset]}\"#{handbrake_extra} #{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}")
+	
+	
 	pv "Running mux."
-	`#{$rm} "tmp.m4v" 2>&1`
-	`#{$mp4box} -add tmp.mp4#{mp4box_extra} "tmp.m4v" #{"1>&2" if $options[:verbose]}`
+	run("#{$rm} tmp.m4v 2>&1")
+	run("#{$mp4box} -add tmp.mp4#{mp4box_extra} tmp.m4v #{"1>&2" if $options[:verbose]}")
 
-	`#{$rm} tmp.mp4` if $options[:debug].nil?
-	`#{$rm} tmp.ttxt` if (srt_sub or ass_sub) and $options[:debug].nil?
+	run("#{$rm} tmp.mp4") if $options[:debug].nil?
+	run("#{$rm} tmp.ttxt") if (srt_sub or ass_sub) and $options[:debug].nil?
 
 	if(srt_sub or ass_sub)
-	  `#{$sed} -e "s/text/sbtl/g" "tmp.m4v" > "#{$options[:output] + base_f}.m4v"` 
-	  `#{$rm} tmp.m4v` if $options[:debug].nil?
+	  run("#{$sed} -e \"s/text/sbtl/g\" tmp.m4v > \"#{$options[:output] + base_f}.m4v\"") 
+	  run("#{$rm} tmp.m4v") if $options[:debug].nil?
 	end
 end
 
-`#{$mkdir} #{$options[:output]} 2>&1`
-$files.each do |f|
-	#check it exists
-	begin
-		fp = File.open(f)
-	rescue => err
-		puts "Cannot open file #{f}: #{err}"
-		exit
+if __FILE__ == $0
+	`#{$mkdir} #{$options[:output]} 2>&1`
+	$files.each do |f|
+		#check it exists
+		begin
+			fp = File.open(f)
+		rescue => err
+			puts "Cannot open file #{f}: #{err}"
+			exit
+		end
+		
+		puts "Converting #{f}"
+		convert_file(f)
+		puts "Done #{f}"
 	end
-	
-	puts "Converting #{f}"
-	convert_file(f)
-	puts "Done #{f}"
 end
