@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:WindowedApplication xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute" initialize="init()">
+<mx:Script>
+<![CDATA[
+import mx.collections.*;
+import flash.filesystem.File;
+import com.adobe.serialization.json.JSON;
+
+private var FileArray:Array = [];
+
+private function browseButtonClicked():void
+{
+	var directory:File = File.documentsDirectory;
+	var mkvFilter:FileFilter = new FileFilter("MKV", "*.mkv");
+	directory.browseForOpenMultiple("Select Directory", [mkvFilter]);
+	directory.addEventListener(FileListEvent.SELECT_MULTIPLE, filesSelected);
+}
+
+private function filesSelected(event:FileListEvent):void
+{
+	for (var i:uint = 0; i < event.files.length; i++) 
+    	initDG.addItem({path:event.files[i].nativePath, status:0});
+}
+
+private function start():void
+{
+	mode = 1;
+	nextFile();
+}
+private function nextFile():void
+{
+	var obj:Object;
+	var flag:int = 0;
+	for (var i:uint = 0; i < FileArray.length; i++)
+		if(FileArray[i]["status"] == 0) {
+			obj = FileArray[i]
+			obj["status"] = 1;
+			initDG.setItemAt(obj, i);
+			flag = 1;
+			break;
+		}
+	
+	if(flag == 1) { //if there is a file
+		var str:String = JSON.encode(obj);
+		try {
+			socket.writeUTFBytes(str);
+			socket.writeUTFBytes("\n");
+			socket.flush();
+		}
+		catch(err:Error) {
+			socketBroke(new Event("Socket broke"));
+		}
+
+	}
+	else
+		mode = 0;
+}
+private function socketConnected(event:Event):void
+{
+	Security.loadPolicyFile('xmlsocket//:localhost:42361');
+	goButton.enabled = true;
+}
+private function socketBroke(event:Event):void
+{
+	trace("SOCKET BROKE")
+	goButton.enabled = false;
+	goButton.label = "SOMETHING BROKEEEEEEEE";
+}
+
+private function handleData(event:ProgressEvent):void
+{
+	try {
+		buffer = buffer.concat(socket.readUTFBytes(event.bytesLoaded)); }
+	catch(err:Error) {
+		socketBroke(new Event("Socket broke")); }
+
+	//Do buffer checks
+	var arr:Array = buffer.split("\n");
+	while(arr.length > 1)
+	{
+		var s:String = arr.shift();
+		var data:Object = JSON.decode(s);
+		
+		if(data["status"] == "Done")
+		{
+			for (var i:uint = 0; i < FileArray.length; i++)
+				if(FileArray[i]["path"] == data["path"]) {
+					var obj:Object = FileArray[i];
+					obj["status"] = 2;
+					initDG.setItemAt(obj, i);
+					break;
+				}
+				
+			nextFile();
+		}
+		
+		buffer = arr.join("\n");
+	}
+}
+
+[Bindable]
+public var initDG:ArrayCollection;
+public var socket:Socket;
+public var buffer:String;
+public var mode:int;
+public function init():void {
+	mode = 0;
+	buffer = "";
+	initDG = new ArrayCollection(FileArray); //for the DataGrid
+	
+	var rubyInfo:NativeProcessStartupInfo = new NativeProcessStartupInfo();
+	var file:File = new File("C:\\Users\\Miles\\Desktop\\misc-video-scripts\\mkv2mp4.exe");
+	rubyInfo.executable = file;
+	var ruby:NativeProcess = new NativeProcess();
+ 	ruby.start(rubyInfo);
+	
+	socket = new Socket();
+	socket.connect("localhost", 42361);
+	socket.addEventListener(ProgressEvent.SOCKET_DATA,handleData);
+	socket.addEventListener(Event.CONNECT,socketConnected);
+	socket.addEventListener(IOErrorEvent.IO_ERROR,socketBroke);
+}
+
+]]>
+</mx:Script>
+
+
+
+	<mx:DataGrid x="10" y="23" id="filelist" dataProvider="{initDG}" >
+		<mx:columns>
+			<mx:DataGridColumn headerText="Column 1" dataField="path"/>
+			<mx:DataGridColumn headerText="Column 2" dataField="status"/>
+		</mx:columns>
+	</mx:DataGrid>
+	<mx:Button x="311" y="35" label="Browse" click="browseButtonClicked()"/>
+	<mx:Button x="285" y="198" label="Go" click="start()" id="goButton" enabled="false"/>
+</mx:WindowedApplication>
