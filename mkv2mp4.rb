@@ -1,5 +1,9 @@
 #!/usr/bin/env ruby
 require (File.dirname(__FILE__) + "/ass2srt")
+require 'json/pure'
+require 'socket'
+require 'optparse'
+exit if defined?(Ocra)
 
 def puts(*args)
     if $platform == :unix
@@ -34,7 +38,7 @@ end
 
 ## Option parsing
 
-require 'optparse'
+
 $options = {:output => "", :preset=>:iphone}
 OptionParser.new do |opts|
   opts.banner = "Usage: mkv2mp4.rb [options] files"
@@ -58,15 +62,6 @@ hb_conversion_preset = {
   :appletv => "AppleTV",
   :universal => "Universal" }
 $options[:preset] = hb_conversion_preset[$options[:preset]]
-
-$files = ARGV
-if $files.count == 0
-  puts "You must specify some files."
-  exit
-end
-
-pv "Called with the following options: #{$options.inspect}"
-pv "Processing the following files: #{$files}"
 
 ## Executable setup / Environment
 def find_exec(str)
@@ -207,6 +202,45 @@ def convert_file(f)
 	  `#{$rm} tmp.m4v` if $options[:debug].nil?
 	end
 end
+
+# GUI
+$files = ARGV
+if $files.count == 0 #gui mode
+  puts "Assuming you want GUI mode"
+  port = 42361
+  
+  begin
+    serv = TCPServer.new(port)
+  rescue Errno::EADDRINUSE
+    puts "Port in use" #do something
+  end
+  Thread.abort_on_exception = true
+  Thread.new {
+  #start GUI
+  while 1 #remove later
+    sock = serv.accept
+    begin
+        ready  = {:status => "Ready"}.to_json
+        sock.puts ready
+        while(str = sock.readline)
+            data = JSON.parse(str.strip)
+            puts data.inspect
+            convert_file(data["path"])
+            sock.puts ({:status => "Done", :path => data["path"]}.to_json)
+        end
+    rescue EOFError
+            
+    end
+  end
+  }
+  while 1 
+  sleep 1
+  end
+  exit
+end
+
+pv "Called with the following options: #{$options.inspect}"
+pv "Processing the following files: #{$files}"
 
 `#{$mkdir} #{$options[:output]} 2>&1`
 $files.each do |f|
