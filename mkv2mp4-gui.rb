@@ -1,12 +1,24 @@
 if RUBY_PLATFORM =~ /darwin/
 	$LOAD_PATH << "lib/"
 end
+
 require 'wx'
 require 'mkv2mp4'
 include Wx
 RowData = Struct.new(:path, :status)
 $options[:verbose] = true
 Thread.abort_on_exception = true
+
+class LogCtrl < Wx::TextCtrl
+	def puts(*v)
+		self.append_text(v.join(""))
+		self.append_text("\n")
+	end
+	def print(*v)
+		self.append_text(v.join(""))
+	end
+
+end
 
 class FileList < Wx::ListCtrl
 	attr_reader :data
@@ -37,19 +49,26 @@ class FileList < Wx::ListCtrl
 end
 
 class MyFrame < Wx::Frame
+	attr_reader :progress
 	def initialize
 		@running = false
-		super(nil, :title => "mkv2mp4-GUI", :pos => DEFAULT_POSITION, :size => DEFAULT_SIZE)
+		super(nil, :title => "mkv2mp4-GUI", :pos => DEFAULT_POSITION, :size => [500,500])
 		
 		panel = Panel.new(self)
 		
 		@browseButton = Button.new(panel, ID_ANY, "Browse", [300, 0])
 		evt_button(@browseButton.get_id()) {|event| browse }
 		
-		@startButton = Button.new(panel, ID_ANY, "Start", [300,50])
-		evt_button(@startButton.get_id()) {|event| start }
+		@startstopButton = Button.new(panel, ID_ANY, "Start", [300,50])
+		evt_button(@startstopButton.get_id()) {|event| startstop }
 		
 		@listControl = FileList.new(panel, ID_ANY, :size => [200,200], :style => Wx::LC_REPORT | Wx::LC_VIRTUAL)		
+		
+		@logControl = LogCtrl.new(panel, ID_ANY, :pos =>[0, 200], :size => [450,200], :style => TE_READONLY | TE_MULTILINE | TE_DONTWRAP)		
+		$log = @logControl
+		
+		@progress = Gauge.new(panel, ID_ANY, 100, :pos =>[200, 50], :style => GA_SMOOTH)
+		$progress = @progress
 		
 		show
 	end
@@ -63,9 +82,10 @@ class MyFrame < Wx::Frame
 		end
    end
    
-   def start
+   def startstop
 		return if @running
 		@running = true
+		@startstopButton.set_label("Stop")
 		@thread = Thread.new do
 			while(item = @listControl.data.select {|a| a[:status] == "Waiting" }.first)
 				@listControl.change_state(@listControl.data.index(item), "Running")
@@ -73,6 +93,7 @@ class MyFrame < Wx::Frame
 				@listControl.change_state(@listControl.data.index(item), "Done")
 			end
 			@running = false
+			@startstopButton.set_label("Start")
 		end
    end
 end

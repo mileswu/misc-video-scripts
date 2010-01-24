@@ -3,17 +3,27 @@ require (File.dirname(__FILE__) + "/ass2srt")
 require 'optparse'
 
 def puts(*args)
-    if $platform == :unix
-	  printf "\033[31m" 
-	  print(args)
-	  printf "\033[0m\n"
+	if $log
+		$log.puts(args)
+		return
+	end
+
+	if $platform == :unix
+		printf "\033[31m" 
+		print(args)
+		printf "\033[0m\n"
 	else
-	  super(args)
+		super(args)
 	end
 end
 
 def pv(*args)
 	if $options[:verbose]
+		if $log
+			$log.puts(args)
+			return
+		end
+	
 		if $platform == :unix
 			printf "\033[32m" 
 			print args
@@ -23,14 +33,28 @@ def pv(*args)
 		end
 	end
 end
-def `(v) #` 
-	pv "Runnning: #{v}"
-	super(v)
-end
 
 def run(v)
 	pv "Runnning: #{v}"
-	system(v)
+	io = IO.popen(v)
+	buffer = ""
+	begin
+		while(i = io.read(100))
+			buffer << i
+			pos = buffer.scan(/\d*.\d* %/)
+			if pos and pos[-1]
+			  prog = pos[-1][0..-2].to_i
+			  $progress.set_value(prog) if $progress
+			end
+			
+			if $log
+				$log.print i
+			elsif $options[:verbose]
+				print i
+			end
+		end
+	rescue EOFError
+	end
 end
 
 class Array
@@ -40,7 +64,6 @@ class Array
 end
 
 ## Option parsing
-
 
 $options = {:output => "", :preset=>:iphone}
 if __FILE__ == $0
@@ -65,7 +88,7 @@ if __FILE__ == $0
 	  puts "You must specify some files."
 	  exit
 	end
-
+	
 	pv "Called with the following options: #{$options.inspect}"
 	pv "Processing the following files: #{$files}"
 end
@@ -112,6 +135,7 @@ if RUBY_PLATFORM =~ /win32/
   $rm = "del"
   $mkdir = "mkdir"
   $sed = base + "sed -b"
+  $null = "NUL"
 else
   $platform = :unix
   
@@ -122,6 +146,7 @@ else
   $rm = "rm"
   $mkdir = "mkdir"
   $sed = "sed"
+  $null = "/dev/null"
 end
 
 ## Conversion
@@ -174,15 +199,16 @@ def convert_file(f)
 	
 	srt_sub = find_sub_track(a, /S_TEXT\/UTF8/)
 	ass_sub = find_sub_track(a, /S_TEXT\/ASS/) if srt_sub.nil?
-
+	
+	##{"> #{$null}" unless $options[:verbose]}
 	if(srt_sub)
 		pv "SRT subs found at track #{srt_sub}. Extracting."
-	  run("#{$mkvextract} tracks \"#{base_f}.mkv\" #{srt_sub}:tmp_orig.srt #{"1>&2" if $options[:verbose]}")
+	  run("#{$mkvextract} tracks \"#{base_f}.mkv\" #{srt_sub}:tmp_orig.srt")
 	  run("#{$sed} -e \"s/{.*}//g\" tmp_orig.srt > tmp.srt")
 	  run("#{$rm} tmp_orig.srt") if $options[:debug].nil?
 	elsif(ass_sub)
 		pv "ASS subs found at track #{ass_sub}. Extracting."
-	  run("#{$mkvextract} tracks \"#{base_f}.mkv\" #{ass_sub}:tmp.ass #{"1>&2" if $options[:verbose]}")
+	  run("#{$mkvextract} tracks \"#{base_f}.mkv\" #{ass_sub}:tmp.ass")
 	  
 	  pv "Converting ASS Subs"
 	  s = File.open("tmp.ass", "rb").read
@@ -203,12 +229,12 @@ def convert_file(f)
 	
 	
 	pv "Running encode."
-	run("#{$handbrake} -i \"#{base_f}.mkv\" -o tmp.mp4#{(" -q " + $options[:quality]) if $options[:quality]} --preset=\"#{$options[:preset]}\"#{handbrake_extra} #{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}")
+	run("#{$handbrake} -i \"#{base_f}.mkv\" -o tmp.mp4#{(" -q " + $options[:quality]) if $options[:quality]} --preset=\"#{$options[:preset]}\"#{handbrake_extra} 2>#{$null}") ##{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}
 	
 	
 	pv "Running mux."
 	run("#{$rm} tmp.m4v 2>&1")
-	run("#{$mp4box} -add tmp.mp4#{mp4box_extra} tmp.m4v #{"1>&2" if $options[:verbose]}")
+	run("#{$mp4box} -add tmp.mp4#{mp4box_extra} tmp.m4v")
 
 	run("#{$rm} tmp.mp4") if $options[:debug].nil?
 	run("#{$rm} tmp.ttxt") if (srt_sub or ass_sub) and $options[:debug].nil?
