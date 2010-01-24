@@ -67,7 +67,7 @@ class MyFrame < Wx::Frame
 		@logControl = LogCtrl.new(panel, ID_ANY, :pos =>[0, 200], :size => [450,200], :style => TE_READONLY | TE_MULTILINE | TE_DONTWRAP)		
 		$log = @logControl
 		
-		@progress = Gauge.new(panel, ID_ANY, 100, :pos =>[200, 50], :style => GA_SMOOTH)
+		@progress = Gauge.new(panel, ID_ANY, 100, :pos =>[200, 100], :size => [150,20], :style => GA_HORIZONTAL | GA_SMOOTH)
 		$progress = @progress
 		
 		show
