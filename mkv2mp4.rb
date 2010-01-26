@@ -36,24 +36,31 @@ end
 
 def run(v)
 	pv "Runnning: #{v}"
-	io = IO.popen(v)
-	buffer = ""
-	begin
-		while(i = io.read(100))
-			buffer << i
-			pos = buffer.scan(/\d*.\d* %/)
-			if pos and pos[-1]
-			  prog = pos[-1][0..-2].to_i
-			  $progress.set_value(prog) if $progress
+	unless $gui
+		`#{v}`
+	else
+		io = IO.popen(v)
+		#stdin, io, stderr = Open3::popen3(v)
+		$pid = io.pid
+		buffer = ""
+		begin
+			while(i = io.read(100))
+				buffer << i
+				pos = buffer.scan(/\d*.\d* %/)
+				if pos and pos[-1]
+				  prog = pos[-1][0..-2].to_i
+				  $progress.set_value(prog) if $progress and $running
+				end
+				
+				if $log and $running
+					$log.print i
+				elsif $options[:verbose]
+					print i
+				end
 			end
-			
-			if $log
-				$log.print i
-			elsif $options[:verbose]
-				print i
-			end
+		rescue EOFError
 		end
-	rescue EOFError
+		$pid = nil
 	end
 end
 
@@ -201,14 +208,16 @@ def convert_file(f)
 	ass_sub = find_sub_track(a, /S_TEXT\/ASS/) if srt_sub.nil?
 	
 	##{"> #{$null}" unless $options[:verbose]}
+	mkvextract_extra = ""
+	mkvextract_extra += " 1>&2" if $gui.nil? and $options[:verbose]
 	if(srt_sub)
 		pv "SRT subs found at track #{srt_sub}. Extracting."
-	  run("#{$mkvextract} tracks \"#{base_f}.mkv\" #{srt_sub}:tmp_orig.srt")
+	  run("#{$mkvextract} tracks \"#{base_f}.mkv\" #{srt_sub}:tmp_orig.srt #{mkvextract_extra}")
 	  run("#{$sed} -e \"s/{.*}//g\" tmp_orig.srt > tmp.srt")
 	  run("#{$rm} tmp_orig.srt") if $options[:debug].nil?
 	elsif(ass_sub)
 		pv "ASS subs found at track #{ass_sub}. Extracting."
-	  run("#{$mkvextract} tracks \"#{base_f}.mkv\" #{ass_sub}:tmp.ass")
+	  run("#{$mkvextract} tracks \"#{base_f}.mkv\" #{ass_sub}:tmp.ass #{mkvextract_extra}")
 	  
 	  pv "Converting ASS Subs"
 	  s = File.open("tmp.ass", "rb").read
@@ -229,12 +238,15 @@ def convert_file(f)
 	
 	
 	pv "Running encode."
-	run("#{$handbrake} -i \"#{base_f}.mkv\" -o tmp.mp4#{(" -q " + $options[:quality]) if $options[:quality]} --preset=\"#{$options[:preset]}\"#{handbrake_extra} 2>#{$null}") ##{$options[:verbose] ? "3>&1 1>&2 2>&3" : "2>&1"}
+	unless $gui
+		handbrake_extra += $options[:verbose] ? " 3>&1 1>&2 2>&3" : " 2>&1"
+	end
+	run("#{$handbrake} -i \"#{base_f}.mkv\" -o tmp.mp4#{(" -q " + $options[:quality]) if $options[:quality]} --preset=\"#{$options[:preset]}\"#{handbrake_extra}")
 	
 	
 	pv "Running mux."
-	run("#{$rm} tmp.m4v 2>&1")
-	run("#{$mp4box} -add tmp.mp4#{mp4box_extra} tmp.m4v")
+	run("#{$rm} tmp.m4v 2>#{$null}")
+	run("#{$mp4box} -add tmp.mp4#{mp4box_extra} tmp.m4v #{mkvextract_extra}")
 
 	run("#{$rm} tmp.mp4") if $options[:debug].nil?
 	run("#{$rm} tmp.ttxt") if (srt_sub or ass_sub) and $options[:debug].nil?
