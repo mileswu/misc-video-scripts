@@ -185,11 +185,16 @@ def find_sub_track(a, regexp_type)
 	inter = sub_tracks&jpn #Choose JPN subs first
 	if inter.count != 0
 		res = inter.first
-	else #If not choose ENG ones
-		inter = sub_tracks&eng
-		res = inter.first
+		return res
 	end
-	return res
+		
+	inter = sub_tracks&eng
+	if inter.count != 0 #If not choose ENG ones
+		res = inter.first
+		return res
+	else
+		retun sub_tracks.first
+	end
 end
 
 def convert_file(f)
