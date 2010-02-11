@@ -193,7 +193,7 @@ def find_sub_track(a, regexp_type)
 		res = inter.first
 		return res
 	else
-		retun sub_tracks.first
+		return sub_tracks.first
 	end
 end
 
